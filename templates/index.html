@@ -10,6 +10,26 @@
       <label for="file">Choose a file:</label>
       <input type="file" id="file" name="file" accept=".txt, .pdf" required />
       <br /><br />
+      <label for="top_n">Top N Words:</label>
+      <input
+        type="number"
+        id="top_n"
+        name="top_n"
+        value="20"
+        min="1"
+        required
+      />
+      <br /><br />
+      <label for="min_word_length">Minimum Word Length:</label>
+      <input
+        type="number"
+        id="min_word_length"
+        name="min_word_length"
+        value="3"
+        min="1"
+        required
+      />
+      <br /><br />
       <input type="submit" value="Analyze" />
     </form>
     <h2>Results:</h2>

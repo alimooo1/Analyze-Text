@@ -41,7 +41,7 @@ def process_text(text, ignored_characters, min_word_length=3, top_n=20, remove_s
             continue
 
         sentence_count += formatted_text.count('.') + formatted_text.count('!') + formatted_text.count('?')
-        
+
         # Remove ignored characters
         for char in ignored_characters:
             formatted_text = formatted_text.replace(char, '')
@@ -113,6 +113,10 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return redirect(request.url)
+    
+    top_n = int(request.form['top_n'])
+    min_word_length = int(request.form['min_word_length'])
+
     if file and (file.filename.endswith('.txt') or file.filename.endswith('.pdf')):
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -124,7 +128,7 @@ def upload_file():
             with open(file_path, 'rt', encoding='utf8') as f:
                 text = f.read()
 
-        results, chart_url = process_text(text, string.punctuation, top_n=20, remove_stop_words=False)
+        results, chart_url = process_text(text, string.punctuation, min_word_length, top_n, remove_stop_words=False)
         return render_template('index.html', results=results, chart_url=chart_url)
 
     return redirect(request.url)
