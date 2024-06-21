@@ -1,6 +1,15 @@
+import os
 import string
 import pymupdf
 import matplotlib.pyplot as plt
+from flask import Flask, request, render_template, redirect, url_for
+from werkzeug.utils import secure_filename
+import io
+import base64
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Define function to extract text from PDF
 def extract_text_from_pdf(file_path):
@@ -12,7 +21,7 @@ def extract_text_from_pdf(file_path):
     return text
 
 # Define function to process text
-def process_text(text, ignored_characters, min_word_length=3, top_n=100, remove_stop_words=False):
+def process_text(text, ignored_characters, min_word_length=3, top_n=20, remove_stop_words=False):
     freq_words = {}
     words_count = 0
     sentence_count = 0
@@ -31,6 +40,8 @@ def process_text(text, ignored_characters, min_word_length=3, top_n=100, remove_
         if not formatted_text:
             continue
 
+        sentence_count += formatted_text.count('.') + formatted_text.count('!') + formatted_text.count('?')
+        
         # Remove ignored characters
         for char in ignored_characters:
             formatted_text = formatted_text.replace(char, '')
@@ -39,7 +50,6 @@ def process_text(text, ignored_characters, min_word_length=3, top_n=100, remove_
         all_words = formatted_text.split()
         words_count += len(all_words)
         total_word_length += sum(len(word) for word in all_words)
-        sentence_count += formatted_text.count('.') + formatted_text.count('!') + formatted_text.count('?')
 
         # Update word frequency dictionary
         for word in all_words:
@@ -60,21 +70,30 @@ def process_text(text, ignored_characters, min_word_length=3, top_n=100, remove_
     sorted_freq_words = dict(sorted(freq_words.items(), key=lambda item: item[1], reverse=True))
     top_words = list(sorted_freq_words.items())[:top_n]
 
-    # Print statistics
-    print(f'Total words: {words_count}')
-    print(f'Unique words: {unique_words_count}')
-    print(f'Average word length: {average_word_length:.2f}')
-    print(f'Sentence count: {sentence_count}')
-    print(f'Average sentence length: {average_sentence_length:.2f} words')
-    print(f'Top {top_n} words:')
+    # Generate results as HTML
+    results = f'''
+    <p>Total words: {words_count}</p>
+    <p>Unique words: {unique_words_count}</p>
+    <p>Average word length: {average_word_length:.2f}</p>
+    <p>Sentence count: {sentence_count}</p>
+    <p>Average sentence length: {average_sentence_length:.2f} words</p>
+    <p>Top {top_n} words:</p>
+    <ul>
+    '''
     for word, freq in top_words:
-        print(f'{word}: {freq}')
+        results += f'<li>{word}: {freq}</li>'
+    results += '</ul>'
 
-    # Plot top N words
-    plot_top_words(top_words)
+    # Plot top N words and save to a bytes object
+    img = io.BytesIO()
+    plot_top_words(top_words, img)
+    img.seek(0)
+    chart_url = base64.b64encode(img.getvalue()).decode()
+
+    return results, f"data:image/png;base64,{chart_url}"
 
 # Define function to plot top words
-def plot_top_words(top_words):
+def plot_top_words(top_words, img):
     words, frequencies = zip(*top_words)
     plt.figure(figsize=(12, 8))
     plt.bar(words, frequencies, color='blue')
@@ -83,18 +102,37 @@ def plot_top_words(top_words):
     plt.title('Top N Frequent Words')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.show()
+    plt.savefig(img, format='png')
+    plt.close()
 
-# Main function to handle both text and PDF files
-def analyze_file(file_path, ignored_characters, min_word_length, top_n=100, remove_stop_words=False):
-    if file_path.lower().endswith('.pdf'):
-        text = extract_text_from_pdf(file_path)
-    else:
-        with open(file_path, 'rt', encoding='utf8') as file:
-            text = file.read()
-    process_text(text, ignored_characters, min_word_length, top_n=top_n, remove_stop_words=remove_stop_words)
+# Route to handle file upload and analysis
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return redirect(request.url)
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(request.url)
+    if file and (file.filename.endswith('.txt') or file.filename.endswith('.pdf')):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
 
-# Define ignored characters and call the function
-IGNORED_CHARACTERS = string.punctuation
-file_path = 'You Dont Know JS - 1st Edition.pdf'  # Replace with your file path
-analyze_file(file_path, IGNORED_CHARACTERS, min_word_length=6, top_n=20, remove_stop_words=False)
+        if filename.endswith('.pdf'):
+            text = extract_text_from_pdf(file_path)
+        else:
+            with open(file_path, 'rt', encoding='utf8') as f:
+                text = f.read()
+
+        results, chart_url = process_text(text, string.punctuation, top_n=20, remove_stop_words=False)
+        return render_template('index.html', results=results, chart_url=chart_url)
+
+    return redirect(request.url)
+
+# Route to render the upload form
+@app.route('/')
+def index():
+    return render_template('index.html', results="", chart_url="")
+
+if __name__ == '__main__':
+    app.run(debug=True)
