@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Text Analysis</title>
+  </head>
+  <body>
+    <h1>Upload a Text or PDF File for Analysis</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+      <label for="file">Choose a file:</label>
+      <input type="file" id="file" name="file" accept=".txt, .pdf" required />
+      <br /><br />
+      <input type="submit" value="Analyze" />
+    </form>
+    <h2>Results:</h2>
+    <div id="results">{{ results | safe }}</div>
+    <img
+      id="chart"
+      src="{{ chart_url }}"
+      alt="Word Frequency Chart"
+      style="display: {{ 'block' if chart_url else 'none' }};"
+    />
+  </body>
+</html>
